@@ -1,11 +1,24 @@
 #!/usr/bin/env python3
 """Fetch pinned Lua sources and apply the reviewable mobile capability boundary."""
-import hashlib, json, pathlib, re, shutil, subprocess, tarfile, urllib.request
+import hashlib, json, pathlib, re, shutil, subprocess, sys, tarfile, time, urllib.error, urllib.request
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parents[2]
 WORK = ROOT / 'Vendor/ios-build'
 POLICY = HERE / 'lua-sandbox'
+
+def download(url, target, attempts=4):
+    partial = target.with_name(target.name + '.download')
+    for attempt in range(1, attempts + 1):
+        try:
+            urllib.request.urlretrieve(url, partial)
+            partial.replace(target)
+            return
+        except (urllib.error.URLError, TimeoutError) as error:
+            partial.unlink(missing_ok=True)
+            if attempt == attempts: raise
+            print(f'Lua archive download attempt {attempt} failed: {error}', file=sys.stderr)
+            time.sleep(attempt * 5)
 
 def prepare(work=WORK):
     lock = json.loads((POLICY / 'versions.json').read_text())
@@ -18,7 +31,7 @@ def prepare(work=WORK):
     if head != revision:
         raise RuntimeError(f'librime-lua checkout is {head}, expected pinned {revision}; refusing to overwrite it')
     archive = work / f'lua-{lock["lua"]["version"]}.tar.gz'
-    if not archive.exists(): urllib.request.urlretrieve(lock['lua']['url'], archive)
+    if not archive.exists(): download(lock['lua']['url'], archive)
     if hashlib.sha256(archive.read_bytes()).hexdigest() != lock['lua']['sha256']:
         raise RuntimeError('Lua archive SHA256 mismatch')
     extracted = work / f'lua-{lock["lua"]["version"]}'

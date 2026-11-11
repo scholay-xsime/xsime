@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Fetch verified source/tool inputs; never fetch executable input schemes."""
 from pathlib import Path
-import hashlib,subprocess,urllib.request,tarfile,zipfile,json
+import hashlib,subprocess,sys,time,urllib.error,urllib.request,tarfile,zipfile,json
 ROOT=Path(__file__).resolve().parents[3]
 WORK=ROOT/'Vendor/ios-build';WORK.mkdir(parents=True,exist_ok=True)
 LOCK=json.loads((ROOT/'platforms/ios/dependencies.lock.json').read_text())
@@ -9,8 +9,15 @@ def run(*args):subprocess.run([str(a) for a in args],check=True)
 def download(item,path):
     if not path.exists():
         tmp=path.with_suffix(path.suffix+'.part')
-        with urllib.request.urlopen(item['url'],timeout=90) as r,tmp.open('wb') as f:
-            while chunk:=r.read(1024*1024):f.write(chunk)
+        for attempt in range(1,5):
+            try:
+                with urllib.request.urlopen(item['url'],timeout=90) as r,tmp.open('wb') as f:
+                    while chunk:=r.read(1024*1024):f.write(chunk)
+                break
+            except (urllib.error.URLError,TimeoutError) as error:
+                tmp.unlink(missing_ok=True)
+                if attempt==4:raise
+                print(f"download attempt {attempt} failed: {error}",file=sys.stderr);time.sleep(attempt*5)
         tmp.replace(path)
     if hashlib.sha256(path.read_bytes()).hexdigest()!=item['sha256']:raise RuntimeError('Checksum mismatch: '+str(path))
 src=WORK/'librime'
