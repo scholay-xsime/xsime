@@ -118,8 +118,16 @@ def verify_recovery_context(run, environ=None):
     require(tag.startswith("v"), "Stable source tag required")
     stable_version(tag[1:])
     commit = source_commit(run.get("head_sha"))
+    # One-time v1.2.1 recovery branch: the old tag's frozen publisher cannot
+    # find draft releases. The branch is a single child of the verified tag.
+    require(tag == "v1.2.1" and commit == "61b9738173c8473eee02b04ef1b8783de52898e2",
+            "This repair is restricted to the original v1.2.1 source")
+    head = subprocess.check_output(["git", "rev-parse", "HEAD"], text=True).strip()
+    parent = subprocess.check_output(["git", "rev-parse", "HEAD^"], text=True).strip()
+    require(parent == commit, "Recovery branch must be a direct child of the source")
     expected = {"GITHUB_REPOSITORY": REPO, "GITHUB_EVENT_NAME": "workflow_dispatch",
-                "GITHUB_REF": "refs/tags/" + tag, "GITHUB_REF_NAME": tag, "GITHUB_SHA": commit}
+                "GITHUB_REF": "refs/heads/codex/recover-v121-20261127",
+                "GITHUB_REF_NAME": "codex/recover-v121-20261127", "GITHUB_SHA": head}
     require(all(environ.get(name) == value for name, value in expected.items()),
             "Recovery must be dispatched at the original stable tag and source commit")
 
