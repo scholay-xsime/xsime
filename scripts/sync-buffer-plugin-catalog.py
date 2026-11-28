@@ -424,7 +424,7 @@ def sync_release_assets(
             actual_names = {
                 path.name
                 for path in output_dir.iterdir()
-                if path.is_file() and not path.is_symlink()
+                if not path.is_symlink() and path.is_file()
             }
         except OSError as error:
             raise CatalogError(f"cannot read release asset directory: {error}")
@@ -440,6 +440,12 @@ def sync_release_assets(
         return
 
     output_dir.mkdir(parents=True, exist_ok=True)
+    try:
+        for path in list(output_dir.iterdir()):
+            if path.name not in expected and not path.is_symlink() and path.is_file():
+                path.unlink()
+    except OSError as error:
+        raise CatalogError(f"cannot clean obsolete release assets: {error}")
     for name, data in expected.items():
         path = output_dir / name
         if path.is_symlink():
